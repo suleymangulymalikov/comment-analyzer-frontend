@@ -1,5 +1,6 @@
 import GoogleProvider from "next-auth/providers/google";
 import type { NextAuthOptions, DefaultSession } from "next-auth";
+import { backendHeaders } from "@/lib/backend";
 
 declare module "next-auth" {
   interface Session {
@@ -29,7 +30,7 @@ export const authOptions: NextAuthOptions = {
       try {
         await fetch(`${backendUrl}/users`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...backendHeaders() },
           body: JSON.stringify({ user_id: profile?.sub, email: user.email }),
         });
       } catch {

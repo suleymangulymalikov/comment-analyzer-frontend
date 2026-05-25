@@ -34,6 +34,7 @@ interface AnalysisResult {
     video_ideas: InsightItem[];
   };
   created_at: string;
+  credits_remaining?: number;
 }
 
 interface AnalysisSummary {
@@ -46,6 +47,12 @@ interface AnalysisSummary {
   summary: string;
   created_at: string;
 }
+
+const PRICING_PLANS = [
+  { key: "pack_standard", label: "Starter Pack", price: "$7.99", credits: 10, type: "One-time" },
+  { key: "sub_starter", label: "Starter", price: "$9.99/mo", credits: 15, type: "Monthly" },
+  { key: "sub_pro", label: "Pro", price: "$19.99/mo", credits: 40, type: "Monthly" },
+] as const;
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
@@ -122,7 +129,6 @@ function Report({ data }: { data: AnalysisResult }) {
 
   return (
     <div className="mt-10 space-y-8">
-      {/* Header */}
       <div className="flex gap-4">
         {data.video_thumbnail_url && (
           <img
@@ -139,7 +145,6 @@ function Report({ data }: { data: AnalysisResult }) {
         </div>
       </div>
 
-      {/* Summary */}
       <div className="rounded-xl border border-blue-100 bg-blue-50 p-5">
         <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-blue-600">
           Summary
@@ -147,7 +152,6 @@ function Report({ data }: { data: AnalysisResult }) {
         <p className="text-gray-800 leading-relaxed">{data.summary}</p>
       </div>
 
-      {/* Stats strip */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-5">
         <div className="flex items-center gap-3">
           <span className="text-4xl font-extrabold text-gray-900">
@@ -176,7 +180,6 @@ function Report({ data }: { data: AnalysisResult }) {
         </div>
       </div>
 
-      {/* Insights */}
       <div className="space-y-8">
         <h3 className="text-xl font-bold text-gray-900">Insights</h3>
         {insightSections.map((s) => (
@@ -220,6 +223,46 @@ function HistoryItem({
   );
 }
 
+function PricingSection({
+  onCheckout,
+  loadingKey,
+}: {
+  onCheckout: (priceKey: string) => void;
+  loadingKey: string | null;
+}) {
+  return (
+    <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <h2 className="mb-1 text-lg font-bold text-gray-900">Buy credits</h2>
+      <p className="mb-5 text-sm text-gray-500">
+        Credits are consumed per analysis based on comment count.
+      </p>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {PRICING_PLANS.map((plan) => (
+          <div key={plan.key} className="flex flex-col rounded-lg border border-gray-200 p-4">
+            <p className="text-sm font-semibold text-gray-700">{plan.label}</p>
+            <p className="mt-1 text-2xl font-extrabold text-gray-900">{plan.price}</p>
+            <p className="text-xs text-gray-400">{plan.type}</p>
+            <p className="mt-3 text-sm text-gray-600">
+              <span className="font-semibold text-gray-800">{plan.credits}</span>{" "}
+              {plan.type === "Monthly" ? "credits/mo" : "credits"}
+            </p>
+            <button
+              onClick={() => onCheckout(plan.key)}
+              disabled={loadingKey !== null}
+              className="mt-auto pt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loadingKey === plan.key ? "Redirecting…" : "Buy"}
+            </button>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-xs text-gray-400">
+        Cost per analysis: 0–500 comments = 1 credit · 501–2k = 2 · 2k–10k = 3 · 10k+ = 5
+      </p>
+    </div>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -229,6 +272,9 @@ export default function Home() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<AnalysisSummary[]>([]);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [showPricing, setShowPricing] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async () => {
     if (!session) return;
@@ -239,9 +285,19 @@ export default function Home() {
     }
   }, [session]);
 
+  const fetchCredits = useCallback(async () => {
+    if (!session) return;
+    const res = await fetch("/api/credits").catch(() => null);
+    if (res?.ok) {
+      const data = await res.json().catch(() => null);
+      if (data?.balance !== undefined) setCredits(data.balance);
+    }
+  }, [session]);
+
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+    fetchCredits();
+  }, [fetchHistory, fetchCredits]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -260,12 +316,23 @@ export default function Home() {
 
       const data = await res.json();
 
+      if (res.status === 402) {
+        const needed = data.required
+          ? ` This video needs ${data.required} credit${data.required !== 1 ? "s" : ""}.`
+          : "";
+        setError(`Not enough credits.${needed}`);
+        setShowPricing(true);
+        setStatus("error");
+        return;
+      }
+
       if (!res.ok) {
         setError(data.error ?? `Error ${res.status}`);
         setStatus("error");
         return;
       }
 
+      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
       setResult(data);
       setStatus("success");
       fetchHistory();
@@ -299,6 +366,31 @@ export default function Home() {
     }
   }
 
+  async function handleCheckout(priceKey: string) {
+    setCheckoutLoading(priceKey);
+    try {
+      const res = await fetch("/api/payments/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          price_key: priceKey,
+          success_url: `${window.location.origin}/?payment=success`,
+          cancel_url: window.location.href,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.checkout_url) {
+        window.location.href = data.checkout_url;
+      } else {
+        setError(data.error ?? "Could not start checkout.");
+      }
+    } catch {
+      setError("Network error — could not start checkout.");
+    } finally {
+      setCheckoutLoading(null);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-3xl px-4 py-12">
@@ -309,9 +401,8 @@ export default function Home() {
             <p className="mt-1 text-gray-500">Paste a YouTube URL to analyze its comments.</p>
           </div>
 
-          {/* Auth widget */}
           {authStatus === "loading" ? null : session ? (
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
               {session.user?.image && (
                 <img
                   src={session.user.image}
@@ -322,6 +413,17 @@ export default function Home() {
               <span className="hidden sm:block text-sm text-gray-700 max-w-[140px] truncate">
                 {session.user?.name ?? session.user?.email}
               </span>
+              {credits !== null && (
+                <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-700">
+                  {credits} credit{credits !== 1 ? "s" : ""}
+                </span>
+              )}
+              <button
+                onClick={() => setShowPricing((v) => !v)}
+                className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-100 transition"
+              >
+                {showPricing ? "Hide pricing" : "Buy credits"}
+              </button>
               <button
                 onClick={() => signOut()}
                 className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50 transition"
@@ -345,6 +447,11 @@ export default function Home() {
           )}
         </div>
 
+        {/* Pricing section */}
+        {session && showPricing && (
+          <PricingSection onCheckout={handleCheckout} loadingKey={checkoutLoading} />
+        )}
+
         {/* Signed-out prompt */}
         {authStatus !== "loading" && !session && (
           <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -353,7 +460,7 @@ export default function Home() {
         )}
 
         {/* Input form */}
-        <form onSubmit={handleSubmit} className="flex gap-3">
+        <form onSubmit={handleSubmit} className="mt-8 flex gap-3">
           <input
             type="url"
             value={url}

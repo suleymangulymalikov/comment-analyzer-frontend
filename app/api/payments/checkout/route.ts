@@ -10,8 +10,11 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => null);
-  if (!body?.video_url) {
-    return NextResponse.json({ error: "video_url is required" }, { status: 400 });
+  if (!body?.price_key || !body?.success_url || !body?.cancel_url) {
+    return NextResponse.json(
+      { error: "price_key, success_url, and cancel_url are required" },
+      { status: 400 }
+    );
   }
 
   const backendUrl = process.env.BACKEND_URL;
@@ -21,20 +24,13 @@ export async function POST(req: NextRequest) {
 
   let response: Response;
   try {
-    response = await fetch(`${backendUrl}/analyze`, {
+    response = await fetch(`${backendUrl}/payments/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...backendHeaders(session.user.id) },
-      body: JSON.stringify({
-        video_url: body.video_url,
-        ...(body.provider !== undefined && { provider: body.provider }),
-        ...(body.force !== undefined && { force: body.force }),
-      }),
+      body: JSON.stringify(body),
     });
   } catch {
-    return NextResponse.json(
-      { error: "Could not reach the analysis backend. Is it running?" },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: "Could not reach the backend." }, { status: 502 });
   }
 
   const data = await response.json().catch(() => null);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { backendHeaders } from "@/lib/backend";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -16,7 +17,7 @@ export async function GET() {
   let response: Response;
   try {
     response = await fetch(`${backendUrl}/analyses`, {
-      headers: { "x-user-id": session.user.id },
+      headers: backendHeaders(session.user.id),
     });
   } catch {
     return NextResponse.json(
