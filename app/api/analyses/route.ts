@@ -1,16 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
-export async function POST(req: NextRequest) {
+export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
-
-  const body = await req.json().catch(() => null);
-  if (!body?.video_url) {
-    return NextResponse.json({ error: "video_url is required" }, { status: 400 });
   }
 
   const backendUrl = process.env.BACKEND_URL;
@@ -20,21 +15,12 @@ export async function POST(req: NextRequest) {
 
   let response: Response;
   try {
-    response = await fetch(`${backendUrl}/analyze`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-user-id": session.user.id,
-      },
-      body: JSON.stringify({
-        video_url: body.video_url,
-        ...(body.provider !== undefined && { provider: body.provider }),
-        ...(body.force !== undefined && { force: body.force }),
-      }),
+    response = await fetch(`${backendUrl}/analyses`, {
+      headers: { "x-user-id": session.user.id },
     });
   } catch {
     return NextResponse.json(
-      { error: "Could not reach the analysis backend. Is it running?" },
+      { error: "Could not reach the analysis backend." },
       { status: 502 }
     );
   }
