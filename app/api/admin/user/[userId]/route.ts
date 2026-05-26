@@ -5,7 +5,7 @@ import { backendHeaders } from "@/lib/backend";
 
 export async function GET(_req: Request, ctx: RouteContext<"/api/admin/user/[userId]">) {
   const session = await getServerSession(authOptions);
-  if (session?.user?.email !== process.env.ADMIN_EMAIL) {
+  if (session?.user?.email !== process.env.NEXT_PUBLIC_ADMIN_EMAIL) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
