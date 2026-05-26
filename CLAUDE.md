@@ -110,6 +110,18 @@ Credits are consumed per analysis based on comment count:
 | `sub_starter` | Monthly | $9.99/mo | 15/mo |
 | `sub_pro` | Monthly | $19.99/mo | 40/mo |
 
+## Deployment
+
+| Service | URL |
+|---------|-----|
+| Frontend (Vercel) | https://comment-analyzer-frontend-murex.vercel.app |
+| Backend (Railway) | https://web-production-47395.up.railway.app |
+
+**Google OAuth** — authorized redirect URI registered in Google Cloud Console:
+`https://comment-analyzer-frontend-murex.vercel.app/api/auth/callback/google`
+
+**Railway cold start** — the backend sleeps after ~15 min of inactivity on the free tier. First request after idle takes 20–30 seconds (sign-in is the most noticeable place).
+
 ## Auth flow
 
 1. User signs in with Google via next-auth
