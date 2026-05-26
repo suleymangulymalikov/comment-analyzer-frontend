@@ -110,6 +110,13 @@ Credits are consumed per analysis based on comment count:
 | `sub_starter` | Monthly | $9.99/mo | 15/mo |
 | `sub_pro` | Monthly | $19.99/mo | 40/mo |
 
+## Git workflow
+
+- **Always create a new branch** for every change — no exceptions, including docs
+- Push the branch, wait for the user to review and merge on GitHub
+- After merge is confirmed, delete the local and remote branch
+- Never push directly to `main`
+
 ## Deployment
 
 | Service | URL |
