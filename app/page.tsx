@@ -257,7 +257,7 @@ function PricingSection({
         ))}
       </div>
       <p className="mt-4 text-xs text-gray-400">
-        Cost per analysis: 0–500 comments = 1 credit · 501–2k = 2 · 2k–10k = 3 · 10k+ = 5
+        1 credit per analysis
       </p>
     </div>
   );
@@ -467,7 +467,7 @@ export default function Home() {
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://www.youtube.com/watch?v=..."
             disabled={status === "loading"}
-            className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-black shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           />
           <button
             type="submit"
@@ -477,6 +477,7 @@ export default function Home() {
             {status === "loading" ? "Analyzing…" : "Analyze"}
           </button>
         </form>
+        <p className="mt-2 text-xs text-gray-400">Analyzes the top 300 most-liked comments.</p>
 
         {/* Loading state */}
         {status === "loading" && (
