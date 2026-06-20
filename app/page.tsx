@@ -477,6 +477,7 @@ export default function Home() {
             {status === "loading" ? "Analyzing…" : "Analyze"}
           </button>
         </form>
+        <p className="mt-2 text-xs text-gray-400">Analyzes the top 300 most-liked comments.</p>
 
         {/* Loading state */}
         {status === "loading" && (
