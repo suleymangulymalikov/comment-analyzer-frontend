@@ -257,7 +257,7 @@ function PricingSection({
         ))}
       </div>
       <p className="mt-4 text-xs text-gray-400">
-        Cost per analysis: 0–500 comments = 1 credit · 501–2k = 2 · 2k–10k = 3 · 10k+ = 5
+        1 credit per analysis
       </p>
     </div>
   );
