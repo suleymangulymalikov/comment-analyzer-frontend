@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,10 +49,6 @@ interface AnalysisSummary {
   pending?: boolean;
   error?: string;
 }
-
-const PRICING_PLANS = [
-  { key: "pack_standard", label: "Starter Pack", price: "$7.99", credits: 10, type: "One-time" },
-] as const;
 
 // ── Sub-components ─────────────────────────────────────────────────────────
 
@@ -145,8 +141,8 @@ function Report({ data }: { data: AnalysisResult }) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-blue-100 bg-blue-50 p-5">
-        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-blue-600">
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-5">
+        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-indigo-600">
           Summary
         </h3>
         <p className="text-gray-800 leading-relaxed">{data.summary}</p>
@@ -252,46 +248,6 @@ function HistoryItem({
   );
 }
 
-function PricingSection({
-  onCheckout,
-  loadingKey,
-}: {
-  onCheckout: (priceKey: string) => void;
-  loadingKey: string | null;
-}) {
-  return (
-    <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-1 text-lg font-bold text-gray-900">Buy credits</h2>
-      <p className="mb-5 text-sm text-gray-500">
-        Credits are consumed per analysis based on comment count.
-      </p>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {PRICING_PLANS.map((plan) => (
-          <div key={plan.key} className="flex flex-col rounded-lg border border-gray-200 p-4">
-            <p className="text-sm font-semibold text-gray-700">{plan.label}</p>
-            <p className="mt-1 text-2xl font-extrabold text-gray-900">{plan.price}</p>
-            <p className="text-xs text-gray-400">{plan.type}</p>
-            <p className="mt-3 text-sm text-gray-600">
-              <span className="font-semibold text-gray-800">{plan.credits}</span>{" "}
-              credits
-            </p>
-            <button
-              onClick={() => onCheckout(plan.key)}
-              disabled={loadingKey !== null}
-              className="mt-auto pt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loadingKey === plan.key ? "Redirecting…" : "Buy"}
-            </button>
-          </div>
-        ))}
-      </div>
-      <p className="mt-4 text-xs text-gray-400">
-        1 credit per analysis
-      </p>
-    </div>
-  );
-}
-
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -301,9 +257,6 @@ export default function Home() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<AnalysisSummary[]>([]);
-  const [credits, setCredits] = useState<number | null>(null);
-  const [showPricing, setShowPricing] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchHistory = useCallback(async () => {
@@ -315,19 +268,9 @@ export default function Home() {
     }
   }, [session]);
 
-  const fetchCredits = useCallback(async () => {
-    if (!session) return;
-    const res = await fetch("/api/credits").catch(() => null);
-    if (res?.ok) {
-      const data = await res.json().catch(() => null);
-      if (data?.balance !== undefined) setCredits(data.balance);
-    }
-  }, [session]);
-
   useEffect(() => {
     fetchHistory();
-    fetchCredits();
-  }, [fetchHistory, fetchCredits]);
+  }, [fetchHistory]);
 
   useEffect(() => {
     return () => {
@@ -426,10 +369,10 @@ export default function Home() {
         clearInterval(pollIntervalRef.current!);
         pollIntervalRef.current = null;
         const fullResult: AnalysisResult = pollData.result;
-        if (fullResult.credits_remaining !== undefined) setCredits(fullResult.credits_remaining);
         setResult(fullResult);
         setStatus("success");
         fetchHistory();
+        window.dispatchEvent(new Event("credits-updated"));
       }
     }, 3000);
   }
@@ -458,92 +401,9 @@ export default function Home() {
     }
   }
 
-  async function handleCheckout(priceKey: string) {
-    setCheckoutLoading(priceKey);
-    try {
-      const res = await fetch("/api/payments/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          price_key: priceKey,
-          success_url: `${window.location.origin}/?payment=success`,
-          cancel_url: window.location.href,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.checkout_url) {
-        window.location.href = data.checkout_url;
-      } else {
-        setError(data.error ?? "Could not start checkout.");
-      }
-    } catch {
-      setError("Network error — could not start checkout.");
-    } finally {
-      setCheckoutLoading(null);
-    }
-  }
-
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        {/* Title + auth header */}
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">Comment Analyzer</h1>
-            <p className="mt-1 text-gray-500">Paste a YouTube URL to analyze its comments.</p>
-          </div>
-
-          {authStatus === "loading" ? null : session ? (
-            <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
-              {session.user?.image && (
-                <img
-                  src={session.user.image}
-                  alt={session.user.name ?? "User avatar"}
-                  className="h-8 w-8 rounded-full"
-                />
-              )}
-              <span className="hidden sm:block text-sm text-gray-700 max-w-[140px] truncate">
-                {session.user?.name ?? session.user?.email}
-              </span>
-              {credits !== null && (
-                <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-700">
-                  {credits} credit{credits !== 1 ? "s" : ""}
-                </span>
-              )}
-              <button
-                onClick={() => setShowPricing((v) => !v)}
-                className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-100 transition"
-              >
-                {showPricing ? "Hide pricing" : "Buy credits"}
-              </button>
-              <button
-                onClick={() => signOut()}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50 transition"
-              >
-                Sign out
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => signIn("google")}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition flex-shrink-0"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-              </svg>
-              Sign in with Google
-            </button>
-          )}
-        </div>
-
-        {/* Pricing section */}
-        {session && showPricing && (
-          <PricingSection onCheckout={handleCheckout} loadingKey={checkoutLoading} />
-        )}
-
+    <main className="min-h-screen">
+      <div className="mx-auto max-w-3xl px-4 py-8">
         {/* Signed-out prompt */}
         {authStatus !== "loading" && !session && (
           <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -552,19 +412,19 @@ export default function Home() {
         )}
 
         {/* Input form */}
-        <form onSubmit={handleSubmit} className="mt-8 flex gap-3">
+        <form onSubmit={handleSubmit} className="flex gap-3">
           <input
             type="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://www.youtube.com/watch?v=..."
             disabled={status === "loading"}
-            className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-black shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-black shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={status === "loading" || !url.trim()}
-            className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {status === "loading" ? "Analyzing…" : "Analyze"}
           </button>
@@ -574,7 +434,7 @@ export default function Home() {
         {/* Loading state */}
         {status === "loading" && (
           <div className="mt-8 flex items-center gap-3 text-gray-500">
-            <svg className="h-5 w-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg className="h-5 w-5 animate-spin text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
             </svg>
