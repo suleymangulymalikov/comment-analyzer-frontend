@@ -52,8 +52,6 @@ interface AnalysisSummary {
 
 const PRICING_PLANS = [
   { key: "pack_standard", label: "Starter Pack", price: "$7.99", credits: 10, type: "One-time" },
-  { key: "sub_starter", label: "Starter", price: "$9.99/mo", credits: 15, type: "Monthly" },
-  { key: "sub_pro", label: "Pro", price: "$19.99/mo", credits: 40, type: "Monthly" },
 ] as const;
 
 // ── Sub-components ─────────────────────────────────────────────────────────
