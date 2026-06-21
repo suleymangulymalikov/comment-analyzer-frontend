@@ -273,7 +273,7 @@ function PricingSection({
             <p className="text-xs text-gray-400">{plan.type}</p>
             <p className="mt-3 text-sm text-gray-600">
               <span className="font-semibold text-gray-800">{plan.credits}</span>{" "}
-              {plan.type === "Monthly" ? "credits/mo" : "credits"}
+              credits
             </p>
             <button
               onClick={() => onCheckout(plan.key)}
