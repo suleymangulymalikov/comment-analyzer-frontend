@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -46,6 +46,8 @@ interface AnalysisSummary {
   model: string;
   summary: string;
   created_at: string;
+  pending?: boolean;
+  error?: string;
 }
 
 const PRICING_PLANS = [
@@ -197,6 +199,35 @@ function HistoryItem({
   item: AnalysisSummary;
   onClick: () => void;
 }) {
+  if (item.pending) {
+    if (item.error) {
+      return (
+        <div className="flex w-full items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-3 shadow-sm">
+          <div className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded bg-red-100">
+            <svg className="h-4 w-4 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-red-700">Analysis failed</p>
+            <p className="mt-0.5 truncate text-xs text-red-500">{item.error}</p>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+        <div className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded bg-gray-100">
+          <svg className="h-4 w-4 animate-spin text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+          </svg>
+        </div>
+        <p className="truncate text-sm font-medium text-gray-400">Analyzing…</p>
+      </div>
+    );
+  }
+
   const date = new Date(item.created_at).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
@@ -275,6 +306,7 @@ export default function Home() {
   const [credits, setCredits] = useState<number | null>(null);
   const [showPricing, setShowPricing] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchHistory = useCallback(async () => {
     if (!session) return;
@@ -299,47 +331,109 @@ export default function Home() {
     fetchCredits();
   }, [fetchHistory, fetchCredits]);
 
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!url.trim()) return;
+
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
 
     setStatus("loading");
     setError("");
     setResult(null);
 
+    let res: Response;
     try {
-      const res = await fetch("/api/analyze", {
+      res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ video_url: url.trim() }),
       });
-
-      const data = await res.json();
-
-      if (res.status === 402) {
-        const needed = data.required
-          ? ` This video needs ${data.required} credit${data.required !== 1 ? "s" : ""}.`
-          : "";
-        setError(`Not enough credits.${needed}`);
-        setShowPricing(true);
-        setStatus("error");
-        return;
-      }
-
-      if (!res.ok) {
-        setError(data.error ?? `Error ${res.status}`);
-        setStatus("error");
-        return;
-      }
-
-      if (data.credits_remaining !== undefined) setCredits(data.credits_remaining);
-      setResult(data);
-      setStatus("success");
-      fetchHistory();
     } catch {
       setError("Network error — could not reach the server.");
       setStatus("error");
+      return;
     }
+
+    const data = await res.json().catch(() => null);
+
+    if (res.status === 503) {
+      setError("Server is busy, please try again in a moment.");
+      setStatus("error");
+      return;
+    }
+
+    if (res.status === 402) {
+      const needed = data?.required
+        ? ` This video needs ${data.required} credit${data.required !== 1 ? "s" : ""}.`
+        : "";
+      setError(`Not enough credits.${needed}`);
+      setShowPricing(true);
+      setStatus("error");
+      return;
+    }
+
+    if (!res.ok) {
+      setError(data?.error ?? `Error ${res.status}`);
+      setStatus("error");
+      return;
+    }
+
+    const jobId: string | undefined = data?.job_id;
+    if (!jobId) {
+      setError("Unexpected response from server.");
+      setStatus("error");
+      return;
+    }
+
+    setHistory((h) => [
+      { id: "__pending__", video_id: "", video_title: "Analyzing...", video_thumbnail_url: "", provider: "", model: "", summary: "", created_at: new Date().toISOString(), pending: true },
+      ...h.filter((item) => !item.pending),
+    ]);
+
+    pollIntervalRef.current = setInterval(async () => {
+      let pollRes: Response;
+      try {
+        pollRes = await fetch(`/api/analyze/status/${jobId}`);
+      } catch {
+        clearInterval(pollIntervalRef.current!);
+        pollIntervalRef.current = null;
+        setError("Network error while checking analysis status.");
+        setStatus("error");
+        setHistory((h) => h.map((item) => item.pending ? { ...item, error: "Network error" } : item));
+        return;
+      }
+
+      const pollData = await pollRes.json().catch(() => null);
+
+      if (!pollRes.ok || pollData?.status === "failed") {
+        clearInterval(pollIntervalRef.current!);
+        pollIntervalRef.current = null;
+        const msg: string = pollData?.error ?? "Analysis failed.";
+        setError(msg);
+        setStatus("error");
+        setHistory((h) => h.map((item) => item.pending ? { ...item, error: msg } : item));
+        return;
+      }
+
+      if (pollData?.status === "done") {
+        clearInterval(pollIntervalRef.current!);
+        pollIntervalRef.current = null;
+        const fullResult: AnalysisResult = pollData.result;
+        if (fullResult.credits_remaining !== undefined) setCredits(fullResult.credits_remaining);
+        setResult(fullResult);
+        setStatus("success");
+        fetchHistory();
+      }
+    }, 3000);
   }
 
   async function handleHistoryClick(id: string) {

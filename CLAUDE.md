@@ -26,6 +26,8 @@ The browser never calls FastAPI directly. All backend requests go through Next.j
 ```
 BACKEND_URL=http://localhost:8000        # FastAPI base URL
 INTERNAL_API_SECRET=                     # Shared secret — empty = inactive (local dev). Set same value on both hosts in production.
+ADMIN_SECRET=                            # Used by /api/admin/credits to call backend POST /admin/credits
+NEXT_PUBLIC_ADMIN_EMAIL=                 # Email address that gets admin panel access (checked server-side too)
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 NEXTAUTH_SECRET=...
@@ -51,12 +53,17 @@ backendHeaders(userId?)  // returns { Authorization, x-user-id }
 |------|---------|
 | `lib/backend.ts` | `backendHeaders()` helper — Authorization + x-user-id for every backend call |
 | `lib/auth.ts` | next-auth config — Google provider, JWT strategy, syncs user to backend on sign-in |
+| `app/providers.tsx` | `SessionProvider` wrapper used in `app/layout.tsx` |
 | `app/page.tsx` | Main UI — analysis form, results, history, credit balance, pricing section |
+| `app/admin/page.tsx` | Admin panel — user credit lookup and manual credit addition |
 | `app/api/analyze/route.ts` | POST — run analysis on a YouTube URL |
+| `app/api/analyze/status/[jobId]/route.ts` | GET — poll job status from FastAPI |
 | `app/api/analyses/route.ts` | GET — list past analyses for the signed-in user |
 | `app/api/analyses/[id]/route.ts` | GET — fetch a single full analysis |
 | `app/api/credits/route.ts` | GET — credit balance + last 10 transactions |
 | `app/api/payments/checkout/route.ts` | POST — create a Stripe Checkout session, returns `checkout_url` |
+| `app/api/admin/credits/route.ts` | POST — add credits to any user (admin only, uses `ADMIN_SECRET`) |
+| `app/api/admin/user/[userId]/route.ts` | GET — fetch credit balance + transactions for any user (admin only) |
 | `app/api/auth/[...nextauth]/route.ts` | next-auth handler |
 
 ## Backend API contract
@@ -70,10 +77,13 @@ All Next.js → FastAPI calls require:
 | Next.js route | FastAPI route | Auth |
 |---------------|---------------|------|
 | POST `/api/analyze` | POST `/analyze` | session + secret |
+| GET `/api/analyze/status/[jobId]` | GET `/analyze/status/{jobId}` | session + secret |
 | GET `/api/analyses` | GET `/analyses` | session + secret |
 | GET `/api/analyses/[id]` | GET `/analyses/{id}` | session + secret |
 | GET `/api/credits` | GET `/credits` | session + secret |
 | POST `/api/payments/checkout` | POST `/payments/checkout` | session + secret |
+| POST `/api/admin/credits` | POST `/admin/credits` | admin email check + `ADMIN_SECRET` |
+| GET `/api/admin/user/[userId]` | GET `/credits` (with userId) | admin email check + secret |
 | *(sign-in callback)* | POST `/users` | secret only |
 
 ### Notable response fields
@@ -93,14 +103,7 @@ All Next.js → FastAPI calls require:
 
 ## Credits
 
-Credits are consumed per analysis based on comment count:
-
-| Comments | Credits |
-|----------|---------|
-| 0–500 | 1 |
-| 501–2,000 | 2 |
-| 2,001–10,000 | 3 |
-| 10,001+ | 5 |
+Every analysis costs **1 credit** regardless of comment count. The app analyzes the top 300 most-liked comments.
 
 ## Pricing plans
 
