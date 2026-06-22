@@ -1,309 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSession, signIn, signOut } from "next-auth/react";
-
-// ── Types ──────────────────────────────────────────────────────────────────
-
-interface InsightItem {
-  title: string;
-  description?: string;
-  reason?: string;
-}
-
-interface AnalysisResult {
-  id: string;
-  video_id: string;
-  video_title: string;
-  video_thumbnail_url: string;
-  provider: string;
-  model: string;
-  prompt_version: number;
-  summary: string;
-  stats: {
-    total_comments_analyzed: number;
-    top_liked_comments: { text: string; likes: number }[];
-    sentiment_breakdown: { positive: number; neutral: number; negative: number };
-  };
-  insights: {
-    complaints: InsightItem[];
-    confusion_points: InsightItem[];
-    content_requests: InsightItem[];
-    audience_struggles: InsightItem[];
-    content_gaps: InsightItem[];
-    video_ideas: InsightItem[];
-  };
-  created_at: string;
-  credits_remaining?: number;
-}
-
-interface AnalysisSummary {
-  id: string;
-  video_id: string;
-  video_title: string;
-  video_thumbnail_url: string;
-  provider: string;
-  model: string;
-  summary: string;
-  created_at: string;
-  pending?: boolean;
-  error?: string;
-}
-
-const PRICING_PLANS = [
-  { key: "pack_standard", label: "Starter Pack", price: "$7.99", credits: 10, type: "One-time" },
-] as const;
-
-// ── Sub-components ─────────────────────────────────────────────────────────
-
-function InsightCard({ item }: { item: InsightItem }) {
-  const body = item.description ?? item.reason ?? "";
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <p className="font-semibold text-gray-900">{item.title}</p>
-      {body && <p className="mt-1 text-sm text-gray-600 leading-relaxed">{body}</p>}
-    </div>
-  );
-}
-
-function InsightSection({ heading, items }: { heading: string; items: InsightItem[] }) {
-  if (!items.length) return null;
-  return (
-    <section>
-      <h3 className="mb-3 text-lg font-bold text-gray-800">{heading}</h3>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {items.map((item, i) => (
-          <InsightCard key={i} item={item} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function SentimentBar({
-  positive,
-  neutral,
-  negative,
-}: {
-  positive: number;
-  neutral: number;
-  negative: number;
-}) {
-  return (
-    <div>
-      <div className="flex h-4 w-full overflow-hidden rounded-full">
-        <div className="bg-emerald-400" style={{ width: `${positive}%` }} title={`Positive ${positive}%`} />
-        <div className="bg-gray-300" style={{ width: `${neutral}%` }} title={`Neutral ${neutral}%`} />
-        <div className="bg-rose-400" style={{ width: `${negative}%` }} title={`Negative ${negative}%`} />
-      </div>
-      <div className="mt-1 flex gap-4 text-xs text-gray-500">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-400" />
-          Positive {positive}%
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-gray-300" />
-          Neutral {neutral}%
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-rose-400" />
-          Negative {negative}%
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function Report({ data }: { data: AnalysisResult }) {
-  const { stats, insights } = data;
-  const { sentiment_breakdown: s } = stats;
-
-  const insightSections: { heading: string; items: InsightItem[] }[] = [
-    { heading: "Complaints", items: insights.complaints },
-    { heading: "Confusion Points", items: insights.confusion_points },
-    { heading: "Content Requests", items: insights.content_requests },
-    { heading: "Audience Struggles", items: insights.audience_struggles },
-    { heading: "Content Gaps", items: insights.content_gaps },
-    { heading: "Video Ideas", items: insights.video_ideas },
-  ];
-
-  return (
-    <div className="mt-10 space-y-8">
-      <div className="flex gap-4">
-        {data.video_thumbnail_url && (
-          <img
-            src={data.video_thumbnail_url}
-            alt={data.video_title}
-            className="h-20 w-36 flex-shrink-0 rounded-lg object-cover shadow-sm"
-          />
-        )}
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">{data.video_title}</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            {data.provider} · {data.model}
-          </p>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-blue-100 bg-blue-50 p-5">
-        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-blue-600">
-          Summary
-        </h3>
-        <p className="text-gray-800 leading-relaxed">{data.summary}</p>
-      </div>
-
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-5">
-        <div className="flex items-center gap-3">
-          <span className="text-4xl font-extrabold text-gray-900">
-            {stats.total_comments_analyzed.toLocaleString()}
-          </span>
-          <span className="text-sm text-gray-500 leading-tight">
-            comments<br />analyzed
-          </span>
-        </div>
-
-        <SentimentBar positive={s.positive} neutral={s.neutral} negative={s.negative} />
-
-        <div>
-          <p className="mb-2 text-sm font-semibold text-gray-700">Top liked comments</p>
-          <ol className="space-y-2">
-            {stats.top_liked_comments.map((c, i) => (
-              <li key={i} className="flex gap-3 text-sm">
-                <span className="flex-shrink-0 font-mono text-gray-400 w-6">{i + 1}.</span>
-                <span className="text-gray-700 flex-1">{c.text}</span>
-                <span className="flex-shrink-0 text-gray-400 tabular-nums">
-                  ♥ {c.likes.toLocaleString()}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </div>
-
-      <div className="space-y-8">
-        <h3 className="text-xl font-bold text-gray-900">Insights</h3>
-        {insightSections.map((s) => (
-          <InsightSection key={s.heading} heading={s.heading} items={s.items} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function HistoryItem({
-  item,
-  onClick,
-}: {
-  item: AnalysisSummary;
-  onClick: () => void;
-}) {
-  if (item.pending) {
-    if (item.error) {
-      return (
-        <div className="flex w-full items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-3 shadow-sm">
-          <div className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded bg-red-100">
-            <svg className="h-4 w-4 text-red-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-red-700">Analysis failed</p>
-            <p className="mt-0.5 truncate text-xs text-red-500">{item.error}</p>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-        <div className="flex h-12 w-20 flex-shrink-0 items-center justify-center rounded bg-gray-100">
-          <svg className="h-4 w-4 animate-spin text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-        </div>
-        <p className="truncate text-sm font-medium text-gray-400">Analyzing…</p>
-      </div>
-    );
-  }
-
-  const date = new Date(item.created_at).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-
-  return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-lg border border-gray-200 bg-white p-3 text-left shadow-sm hover:bg-gray-50 transition"
-    >
-      {item.video_thumbnail_url && (
-        <img
-          src={item.video_thumbnail_url}
-          alt={item.video_title}
-          className="h-12 w-20 flex-shrink-0 rounded object-cover"
-        />
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-900">{item.video_title}</p>
-        <p className="text-xs text-gray-400 mt-0.5">{item.provider} · {date}</p>
-      </div>
-    </button>
-  );
-}
-
-function PricingSection({
-  onCheckout,
-  loadingKey,
-}: {
-  onCheckout: (priceKey: string) => void;
-  loadingKey: string | null;
-}) {
-  return (
-    <div className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-1 text-lg font-bold text-gray-900">Buy credits</h2>
-      <p className="mb-5 text-sm text-gray-500">
-        Credits are consumed per analysis based on comment count.
-      </p>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {PRICING_PLANS.map((plan) => (
-          <div key={plan.key} className="flex flex-col rounded-lg border border-gray-200 p-4">
-            <p className="text-sm font-semibold text-gray-700">{plan.label}</p>
-            <p className="mt-1 text-2xl font-extrabold text-gray-900">{plan.price}</p>
-            <p className="text-xs text-gray-400">{plan.type}</p>
-            <p className="mt-3 text-sm text-gray-600">
-              <span className="font-semibold text-gray-800">{plan.credits}</span>{" "}
-              credits
-            </p>
-            <button
-              onClick={() => onCheckout(plan.key)}
-              disabled={loadingKey !== null}
-              className="mt-auto pt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loadingKey === plan.key ? "Redirecting…" : "Buy"}
-            </button>
-          </div>
-        ))}
-      </div>
-      <p className="mt-4 text-xs text-gray-400">
-        1 credit per analysis
-      </p>
-    </div>
-  );
-}
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { VideoCard, VideoCardSkeleton, type AnalysisSummary } from "@/app/components/VideoCard";
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
 export default function Home() {
   const { data: session, status: authStatus } = useSession();
+  const router = useRouter();
   const [url, setUrl] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
-  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [history, setHistory] = useState<AnalysisSummary[]>([]);
-  const [credits, setCredits] = useState<number | null>(null);
-  const [showPricing, setShowPricing] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchHistory = useCallback(async () => {
@@ -311,28 +24,130 @@ export default function Home() {
     const res = await fetch("/api/analyses").catch(() => null);
     if (res?.ok) {
       const data = await res.json().catch(() => []);
-      setHistory(data);
+      setHistory((current) => {
+        // Prefer pending items already in state; fall back to sessionStorage so
+        // we never drop the placeholder in case fetchHistory resolves before the
+        // mount effect's setHistory has committed.
+        const pending = current.filter((i) => i.pending);
+        const hasActiveJob = sessionStorage.getItem("activeJobId") !== null;
+        const placeholder: AnalysisSummary[] =
+          pending.length === 0 && hasActiveJob
+            ? [{
+                id: "__pending__",
+                video_id: "",
+                video_title: "",
+                video_thumbnail_url: "",
+                provider: "",
+                model: "",
+                summary: "",
+                created_at: new Date().toISOString(),
+                pending: true,
+              }]
+            : pending;
+        return [...placeholder, ...data];
+      });
     }
+    setHistoryLoading(false);
   }, [session]);
 
-  const fetchCredits = useCallback(async () => {
-    if (!session) return;
-    const res = await fetch("/api/credits").catch(() => null);
-    if (res?.ok) {
-      const data = await res.json().catch(() => null);
-      if (data?.balance !== undefined) setCredits(data.balance);
-    }
-  }, [session]);
+  const startPolling = useCallback((jobId: string) => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+    pollIntervalRef.current = setInterval(async () => {
+      let pollRes: Response;
+      try {
+        pollRes = await fetch(`/api/analyze/status/${jobId}`);
+      } catch {
+        clearInterval(pollIntervalRef.current!);
+        pollIntervalRef.current = null;
+        sessionStorage.removeItem("activeJobId");
+        setError("Network error while checking analysis status.");
+        setStatus("error");
+        setHistory((h) =>
+          h.map((item) => (item.pending ? { ...item, error: "Network error" } : item))
+        );
+        return;
+      }
+
+      const pollData = await pollRes.json().catch(() => null);
+
+      if (!pollRes.ok || pollData?.status === "failed") {
+        clearInterval(pollIntervalRef.current!);
+        pollIntervalRef.current = null;
+        sessionStorage.removeItem("activeJobId");
+        const msg: string = pollData?.error ?? "Analysis failed.";
+        setError(msg);
+        setStatus("error");
+        setHistory((h) =>
+          h.map((item) => (item.pending ? { ...item, error: msg } : item))
+        );
+        return;
+      }
+
+      if (pollData?.status === "done") {
+        clearInterval(pollIntervalRef.current!);
+        pollIntervalRef.current = null;
+        sessionStorage.removeItem("activeJobId");
+        window.dispatchEvent(new Event("credits-updated"));
+
+        setHistory((h) =>
+          h.map((item) =>
+            item.pending ? { ...pollData.result, pending: false, isNew: true } : item
+          )
+        );
+
+        setStatus("idle");
+        fetchHistory();
+      }
+    }, 3000);
+  }, [fetchHistory]);
+
+  // On mount: restore in-progress job from sessionStorage if any.
+  useEffect(() => {
+    const savedJobId = sessionStorage.getItem("activeJobId");
+    if (!savedJobId) return;
+
+    setStatus("loading");
+    setHistory((h) => {
+      if (h.some((i) => i.pending)) return h;
+      return [
+        {
+          id: "__pending__",
+          video_id: "",
+          video_title: "",
+          video_thumbnail_url: "",
+          provider: "",
+          model: "",
+          summary: "",
+          created_at: new Date().toISOString(),
+          pending: true,
+        },
+        ...h,
+      ];
+    });
+    startPolling(savedJobId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetchHistory();
-    fetchCredits();
-  }, [fetchHistory, fetchCredits]);
+  }, [fetchHistory]);
 
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success") {
+      setPaymentSuccess(true);
+      window.history.replaceState({}, "", window.location.pathname);
+      setTimeout(() => {
+        window.dispatchEvent(new Event("credits-updated"));
+      }, 3000);
+    }
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -346,7 +161,22 @@ export default function Home() {
 
     setStatus("loading");
     setError("");
-    setResult(null);
+
+    // Show placeholder immediately so the skeleton card appears right away.
+    setHistory((h) => [
+      {
+        id: "__pending__",
+        video_id: "",
+        video_title: "",
+        video_thumbnail_url: "",
+        provider: "",
+        model: "",
+        summary: "",
+        created_at: new Date().toISOString(),
+        pending: true,
+      },
+      ...h.filter((item) => !item.pending),
+    ]);
 
     let res: Response;
     try {
@@ -358,6 +188,7 @@ export default function Home() {
     } catch {
       setError("Network error — could not reach the server.");
       setStatus("error");
+      setHistory((h) => h.filter((item) => !item.pending));
       return;
     }
 
@@ -366,6 +197,7 @@ export default function Home() {
     if (res.status === 503) {
       setError("Server is busy, please try again in a moment.");
       setStatus("error");
+      setHistory((h) => h.filter((item) => !item.pending));
       return;
     }
 
@@ -374,14 +206,15 @@ export default function Home() {
         ? ` This video needs ${data.required} credit${data.required !== 1 ? "s" : ""}.`
         : "";
       setError(`Not enough credits.${needed}`);
-      setShowPricing(true);
       setStatus("error");
+      setHistory((h) => h.filter((item) => !item.pending));
       return;
     }
 
     if (!res.ok) {
       setError(data?.error ?? `Error ${res.status}`);
       setStatus("error");
+      setHistory((h) => h.filter((item) => !item.pending));
       return;
     }
 
@@ -389,225 +222,131 @@ export default function Home() {
     if (!jobId) {
       setError("Unexpected response from server.");
       setStatus("error");
+      setHistory((h) => h.filter((item) => !item.pending));
       return;
     }
 
-    setHistory((h) => [
-      { id: "__pending__", video_id: "", video_title: "Analyzing...", video_thumbnail_url: "", provider: "", model: "", summary: "", created_at: new Date().toISOString(), pending: true },
-      ...h.filter((item) => !item.pending),
-    ]);
-
-    pollIntervalRef.current = setInterval(async () => {
-      let pollRes: Response;
-      try {
-        pollRes = await fetch(`/api/analyze/status/${jobId}`);
-      } catch {
-        clearInterval(pollIntervalRef.current!);
-        pollIntervalRef.current = null;
-        setError("Network error while checking analysis status.");
-        setStatus("error");
-        setHistory((h) => h.map((item) => item.pending ? { ...item, error: "Network error" } : item));
-        return;
-      }
-
-      const pollData = await pollRes.json().catch(() => null);
-
-      if (!pollRes.ok || pollData?.status === "failed") {
-        clearInterval(pollIntervalRef.current!);
-        pollIntervalRef.current = null;
-        const msg: string = pollData?.error ?? "Analysis failed.";
-        setError(msg);
-        setStatus("error");
-        setHistory((h) => h.map((item) => item.pending ? { ...item, error: msg } : item));
-        return;
-      }
-
-      if (pollData?.status === "done") {
-        clearInterval(pollIntervalRef.current!);
-        pollIntervalRef.current = null;
-        const fullResult: AnalysisResult = pollData.result;
-        if (fullResult.credits_remaining !== undefined) setCredits(fullResult.credits_remaining);
-        setResult(fullResult);
-        setStatus("success");
-        fetchHistory();
-      }
-    }, 3000);
+    sessionStorage.setItem("activeJobId", jobId);
+    startPolling(jobId);
   }
 
-  async function handleHistoryClick(id: string) {
-    setStatus("loading");
-    setError("");
-    setResult(null);
-
-    try {
-      const res = await fetch(`/api/analyses/${id}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error ?? `Error ${res.status}`);
-        setStatus("error");
-        return;
-      }
-
-      setResult(data);
-      setStatus("success");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch {
-      setError("Network error — could not load analysis.");
-      setStatus("error");
-    }
-  }
-
-  async function handleCheckout(priceKey: string) {
-    setCheckoutLoading(priceKey);
-    try {
-      const res = await fetch("/api/payments/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          price_key: priceKey,
-          success_url: `${window.location.origin}/?payment=success`,
-          cancel_url: window.location.href,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.checkout_url) {
-        window.location.href = data.checkout_url;
-      } else {
-        setError(data.error ?? "Could not start checkout.");
-      }
-    } catch {
-      setError("Network error — could not start checkout.");
-    } finally {
-      setCheckoutLoading(null);
-    }
-  }
+  const pendingItems = history.filter((i) => i.pending);
+  const realItems = history.filter((i) => !i.pending);
+  const displayItems = [...pendingItems, ...realItems].slice(0, 5);
+  const showViewAll = realItems.length > 5 - pendingItems.length;
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-3xl px-4 py-12">
-        {/* Title + auth header */}
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">Comment Analyzer</h1>
-            <p className="mt-1 text-gray-500">Paste a YouTube URL to analyze its comments.</p>
-          </div>
+    <main className="min-h-screen">
 
-          {authStatus === "loading" ? null : session ? (
-            <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0">
-              {session.user?.image && (
-                <img
-                  src={session.user.image}
-                  alt={session.user.name ?? "User avatar"}
-                  className="h-8 w-8 rounded-full"
-                />
-              )}
-              <span className="hidden sm:block text-sm text-gray-700 max-w-[140px] truncate">
-                {session.user?.name ?? session.user?.email}
-              </span>
-              {credits !== null && (
-                <span className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-700">
-                  {credits} credit{credits !== 1 ? "s" : ""}
-                </span>
-              )}
-              <button
-                onClick={() => setShowPricing((v) => !v)}
-                className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm hover:bg-blue-100 transition"
-              >
-                {showPricing ? "Hide pricing" : "Buy credits"}
-              </button>
-              <button
-                onClick={() => signOut()}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50 transition"
-              >
-                Sign out
-              </button>
-            </div>
-          ) : (
+      {/* Payment success banner */}
+      {paymentSuccess && (
+        <div className="mx-auto max-w-7xl px-6 pt-4">
+          <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+            <span>Payment successful — your credits will appear shortly.</span>
             <button
-              onClick={() => signIn("google")}
-              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition flex-shrink-0"
+              onClick={() => setPaymentSuccess(false)}
+              className="ml-4 text-emerald-500 hover:text-emerald-700"
+              aria-label="Dismiss"
             >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-              </svg>
-              Sign in with Google
+              ✕
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Hero — full-width indigo gradient section */}
+      <section className="bg-gradient-to-b from-indigo-50/70 to-white px-6 py-16">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-indigo-500">
+            YouTube Comment Intelligence
+          </p>
+          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
+            What is your audience{" "}
+            <em className="italic text-indigo-600">really</em> saying?
+          </h1>
+          <p className="mt-4 text-base text-gray-500">
+            Paste any YouTube URL and get AI-powered insights from the comments in seconds.
+          </p>
+
+          {/* Signed-out prompt */}
+          {authStatus !== "loading" && !session && (
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              Sign in with Google to analyze YouTube comments.
+            </div>
+          )}
+
+          {/* Input form */}
+          <form onSubmit={handleSubmit} className="mt-8 flex gap-2">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+                <svg className="h-5 w-5 text-red-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                </svg>
+              </div>
+              <input
+                type="url"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                disabled={status === "loading"}
+                className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-10 pr-4 text-sm text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={status === "loading" || !url.trim()}
+              className="cursor-pointer whitespace-nowrap rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {status === "loading" ? "Analyzing…" : "Analyze →"}
+            </button>
+          </form>
+          <p className="mt-2 text-left text-xs text-gray-400">
+            Top 300 most-liked comments · 1 credit per analysis
+          </p>
+
+          {/* Error state */}
+          {status === "error" && (
+            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-left">
+              <span className="font-semibold">Error: </span>{error}
+            </div>
           )}
         </div>
+      </section>
 
-        {/* Pricing section */}
-        {session && showPricing && (
-          <PricingSection onCheckout={handleCheckout} loadingKey={checkoutLoading} />
-        )}
+      {/* Divider */}
+      <div className="border-t border-gray-200" />
 
-        {/* Signed-out prompt */}
-        {authStatus !== "loading" && !session && (
-          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            Sign in with Google to analyze YouTube comments.
-          </div>
-        )}
-
-        {/* Input form */}
-        <form onSubmit={handleSubmit} className="mt-8 flex gap-3">
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.youtube.com/watch?v=..."
-            disabled={status === "loading"}
-            className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-black shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={status === "loading" || !url.trim()}
-            className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {status === "loading" ? "Analyzing…" : "Analyze"}
-          </button>
-        </form>
-        <p className="mt-2 text-xs text-gray-400">Analyzes the top 300 most-liked comments.</p>
-
-        {/* Loading state */}
-        {status === "loading" && (
-          <div className="mt-8 flex items-center gap-3 text-gray-500">
-            <svg className="h-5 w-5 animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
-            <span>Fetching and analyzing comments — this can take 30–60 seconds…</span>
-          </div>
-        )}
-
-        {/* Error state */}
-        {status === "error" && (
-          <div className="mt-8 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <span className="font-semibold">Error: </span>{error}
-          </div>
-        )}
-
-        {/* Success state */}
-        {status === "success" && result && <Report data={result} />}
-
-        {/* Past analyses */}
-        {session && history.length > 0 && (
-          <div className="mt-16">
-            <h2 className="mb-4 text-lg font-bold text-gray-900">Past analyses</h2>
-            <div className="space-y-2">
-              {history.map((item) => (
-                <HistoryItem
+      {/* Recent analyses */}
+      {session && (historyLoading || displayItems.length > 0) && (
+        <section className="px-8 py-12">
+          <div>
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-gray-900">Recent analyses</h2>
+              {showViewAll && (
+                <Link href="/history" className="text-sm text-indigo-600 hover:underline">
+                  View all →
+                </Link>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+              {displayItems.map((item) => (
+                <VideoCard
                   key={item.id}
                   item={item}
-                  onClick={() => handleHistoryClick(item.id)}
+                  onClick={() => {
+                    if (!item.pending) router.push(`/analysis/${item.id}`);
+                  }}
                 />
               ))}
+              {historyLoading &&
+                Array.from({ length: Math.max(0, 5 - displayItems.length) }).map((_, i) => (
+                  <VideoCardSkeleton key={`__skeleton__${i}`} />
+                ))}
             </div>
           </div>
-        )}
-      </div>
+        </section>
+      )}
+
     </main>
   );
 }
