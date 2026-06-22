@@ -25,14 +25,26 @@ export interface AnalysisSummary {
   error?: string;
 }
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+export function VideoCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="aspect-video w-full animate-pulse bg-gray-200" />
+      <div className="p-4">
+        <div className="space-y-1.5">
+          <div className="h-3 w-full animate-pulse rounded bg-gray-200" />
+          <div className="h-3 w-3/4 animate-pulse rounded bg-gray-200" />
+        </div>
+        <div className="mt-2.5 h-2 w-full animate-pulse rounded-full bg-gray-200" />
+        <div className="mt-2.5 space-y-1.5">
+          <div className="h-2.5 w-full animate-pulse rounded bg-gray-200" />
+          <div className="h-2.5 w-4/6 animate-pulse rounded bg-gray-200" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
-
-export function HistoryCard({
+export function VideoCard({
   item,
   onClick,
 }: {
@@ -42,7 +54,7 @@ export function HistoryCard({
   if (item.pending) {
     if (item.error) {
       return (
-        <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-xl border border-red-200 bg-white shadow-sm">
           <div className="flex aspect-video w-full items-center justify-center bg-red-100">
             <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -55,30 +67,7 @@ export function HistoryCard({
         </div>
       );
     }
-    return (
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        {/* Thumbnail skeleton */}
-        <div className="aspect-video w-full animate-pulse bg-gray-200" />
-
-        {/* Body skeleton */}
-        <div className="p-4">
-          {/* Title — two lines */}
-          <div className="space-y-1.5">
-            <div className="h-3 w-full animate-pulse rounded bg-gray-200" />
-            <div className="h-3 w-3/4 animate-pulse rounded bg-gray-200" />
-          </div>
-
-          {/* Sentiment bar */}
-          <div className="mt-2.5 h-2 w-full animate-pulse rounded-full bg-gray-200" />
-
-          {/* Summary — two lines */}
-          <div className="mt-2.5 space-y-1.5">
-            <div className="h-2.5 w-full animate-pulse rounded bg-gray-200" />
-            <div className="h-2.5 w-4/6 animate-pulse rounded bg-gray-200" />
-          </div>
-        </div>
-      </div>
-    );
+    return <VideoCardSkeleton />;
   }
 
   const sentiment = item.stats?.sentiment_breakdown;
@@ -87,7 +76,7 @@ export function HistoryCard({
   return (
     <button
       onClick={onClick}
-      className="group w-full overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:shadow-md"
+      className="group w-full cursor-pointer overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:shadow-md"
     >
       {/* Thumbnail */}
       <div className="relative w-full overflow-hidden">
@@ -109,12 +98,10 @@ export function HistoryCard({
 
       {/* Content */}
       <div className="p-4">
-        {/* Title */}
         <p className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900 transition-colors group-hover:text-indigo-600">
           {item.video_title}
         </p>
 
-        {/* Sentiment bar */}
         <div className="mt-2">
           <div className="flex h-2 w-full overflow-hidden rounded-full">
             {hasSentiment && sentiment ? (
@@ -136,7 +123,6 @@ export function HistoryCard({
           )}
         </div>
 
-        {/* Summary */}
         {item.summary && (
           <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500">
             {item.summary}

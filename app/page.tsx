@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { HistoryCard, type AnalysisSummary } from "@/app/components/HistoryCard";
+import { VideoCard, VideoCardSkeleton, type AnalysisSummary } from "@/app/components/VideoCard";
 
 // ── Main page ──────────────────────────────────────────────────────────────
 
@@ -295,7 +295,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={status === "loading" || !url.trim()}
-              className="whitespace-nowrap rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="cursor-pointer whitespace-nowrap rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {status === "loading" ? "Analyzing…" : "Analyze →"}
             </button>
@@ -330,7 +330,7 @@ export default function Home() {
             </div>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               {displayItems.map((item) => (
-                <HistoryCard
+                <VideoCard
                   key={item.id}
                   item={item}
                   onClick={() => {
@@ -340,11 +340,7 @@ export default function Home() {
               ))}
               {historyLoading &&
                 Array.from({ length: Math.max(0, 5 - displayItems.length) }).map((_, i) => (
-                  <HistoryCard
-                    key={`__skeleton__${i}`}
-                    item={{ id: `__skeleton__${i}`, video_id: "", video_title: "", video_thumbnail_url: "", provider: "", model: "", summary: "", created_at: "", pending: true }}
-                    onClick={() => {}}
-                  />
+                  <VideoCardSkeleton key={`__skeleton__${i}`} />
                 ))}
             </div>
           </div>

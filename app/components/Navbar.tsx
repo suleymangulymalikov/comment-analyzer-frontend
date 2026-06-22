@@ -69,7 +69,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white">
       <div className="flex h-14 items-center justify-between px-8">
         {/* Logo */}
-        <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 cursor-pointer">
           <svg
             className="h-6 w-6 text-indigo-600"
             fill="none"
@@ -84,7 +84,7 @@ export default function Navbar() {
             />
           </svg>
           <span className="text-base font-bold text-gray-900">Comment Analyzer</span>
-        </div>
+        </Link>
 
         {/* Right side */}
         {status === "loading" ? (
