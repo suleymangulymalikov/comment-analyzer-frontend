@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession, signIn, signOut } from "next-auth/react";
+import Link from "next/link";
 
 export default function Navbar() {
   const { data: session, status } = useSession();
@@ -66,7 +67,7 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white">
-      <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
+      <div className="flex h-14 items-center justify-between px-8">
         {/* Logo */}
         <div className="flex items-center gap-2">
           <svg
@@ -89,6 +90,18 @@ export default function Navbar() {
         {status === "loading" ? (
           <div className="h-8 w-8 animate-pulse rounded-full bg-gray-100" />
         ) : session ? (
+          <div className="flex items-center gap-4">
+            <Link
+              href="/history"
+              className="text-sm font-medium text-gray-600 hover:text-gray-900"
+            >
+              History
+            </Link>
+            {credits !== null && (
+              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                {credits} credits
+              </span>
+            )}
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setDropdownOpen((v) => !v)}
@@ -158,6 +171,7 @@ export default function Navbar() {
                 </button>
               </div>
             )}
+          </div>
           </div>
         ) : (
           <button

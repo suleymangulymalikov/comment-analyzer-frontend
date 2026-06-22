@@ -9,6 +9,9 @@ export interface AnalysisSummary {
   model: string;
   summary: string;
   created_at: string;
+  video_view_count?: number;
+  video_like_count?: number;
+  video_comment_count?: number;
   stats?: {
     total_comments_analyzed?: number;
     sentiment_breakdown?: {
@@ -18,7 +21,14 @@ export interface AnalysisSummary {
     };
   };
   pending?: boolean;
+  isNew?: boolean;
   error?: string;
+}
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
 
@@ -46,13 +56,26 @@ export function HistoryCard({
       );
     }
     return (
-      <div className="overflow-hidden rounded-2xl border border-gray-800 bg-gray-900 shadow-sm">
-        <div className="flex aspect-video w-full flex-col items-center justify-center gap-2">
-          <svg className="h-5 w-5 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
-          <p className="text-xs text-gray-400">Analyzing…</p>
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        {/* Thumbnail skeleton */}
+        <div className="aspect-video w-full animate-pulse bg-gray-200" />
+
+        {/* Body skeleton */}
+        <div className="p-4">
+          {/* Title — two lines */}
+          <div className="space-y-1.5">
+            <div className="h-3 w-full animate-pulse rounded bg-gray-200" />
+            <div className="h-3 w-3/4 animate-pulse rounded bg-gray-200" />
+          </div>
+
+          {/* Sentiment bar */}
+          <div className="mt-2.5 h-2 w-full animate-pulse rounded-full bg-gray-200" />
+
+          {/* Summary — two lines */}
+          <div className="mt-2.5 space-y-1.5">
+            <div className="h-2.5 w-full animate-pulse rounded bg-gray-200" />
+            <div className="h-2.5 w-4/6 animate-pulse rounded bg-gray-200" />
+          </div>
         </div>
       </div>
     );
@@ -64,9 +87,9 @@ export function HistoryCard({
   return (
     <button
       onClick={onClick}
-      className="group w-full overflow-hidden rounded-2xl border border-gray-200 bg-white text-left shadow-sm transition hover:shadow-md"
+      className="group w-full overflow-hidden rounded-xl border border-gray-200 bg-white text-left shadow-sm transition hover:shadow-md"
     >
-      {/* Thumbnail — flush, 16:9, no padding */}
+      {/* Thumbnail */}
       <div className="relative w-full overflow-hidden">
         {item.video_thumbnail_url ? (
           <img
@@ -77,18 +100,23 @@ export function HistoryCard({
         ) : (
           <div className="aspect-video w-full bg-gray-100" />
         )}
+        {item.isNew && (
+          <span className="absolute left-2 top-2 rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-semibold text-white">
+            New
+          </span>
+        )}
       </div>
 
       {/* Content */}
       <div className="p-4">
         {/* Title */}
-        <p className="line-clamp-2 font-bold leading-snug text-gray-900 transition-colors group-hover:text-indigo-600">
+        <p className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900 transition-colors group-hover:text-indigo-600">
           {item.video_title}
         </p>
 
-        {/* Sentiment bar — always shown; flat gray placeholder when data is absent */}
-        <div className="mt-3">
-          <div className="flex h-2.5 w-full overflow-hidden rounded-full">
+        {/* Sentiment bar */}
+        <div className="mt-2">
+          <div className="flex h-2 w-full overflow-hidden rounded-full">
             {hasSentiment && sentiment ? (
               <>
                 <div className="bg-emerald-500" style={{ width: `${sentiment.positive}%` }} />
@@ -99,22 +127,18 @@ export function HistoryCard({
               <div className="w-full bg-gray-200" />
             )}
           </div>
-          <div className="mt-1.5 flex flex-wrap gap-x-3 text-xs">
-            <span className="text-emerald-600">
-              ● Positive {sentiment ? `${sentiment.positive}%` : "—"}
-            </span>
-            <span className="text-gray-400">
-              ● Neutral {sentiment ? `${sentiment.neutral}%` : "—"}
-            </span>
-            <span className="text-rose-500">
-              ● Negative {sentiment ? `${sentiment.negative}%` : "—"}
-            </span>
-          </div>
+          {hasSentiment && sentiment && (
+            <div className="mt-1 flex gap-x-2 text-[10px] text-gray-400">
+              <span className="text-emerald-600">{sentiment.positive}%</span>
+              <span>{sentiment.neutral}%</span>
+              <span className="text-rose-500">{sentiment.negative}%</span>
+            </div>
+          )}
         </div>
 
         {/* Summary */}
         {item.summary && (
-          <p className="mt-2.5 line-clamp-3 text-sm leading-relaxed text-gray-500">
+          <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500">
             {item.summary}
           </p>
         )}
