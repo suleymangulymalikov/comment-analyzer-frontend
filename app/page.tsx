@@ -164,7 +164,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto max-w-3xl px-4 py-10">
+      <div className="mx-auto max-w-6xl px-6 py-10">
 
         {/* Payment success banner */}
         {paymentSuccess && (
@@ -202,7 +202,7 @@ export default function Home() {
         )}
 
         {/* Input form */}
-        <form onSubmit={handleSubmit} className="flex gap-2">
+        <form onSubmit={handleSubmit} className="mx-auto flex max-w-2xl gap-2">
           <div className="relative flex-1">
             <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
               <svg className="h-5 w-5 text-red-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -226,7 +226,7 @@ export default function Home() {
             {status === "loading" ? "Analyzing…" : "Analyze →"}
           </button>
         </form>
-        <p className="mt-2 text-xs text-gray-400">
+        <p className="mx-auto mt-2 max-w-2xl text-xs text-gray-400">
           Top 300 most-liked comments · 1 credit per analysis
         </p>
 
@@ -259,7 +259,7 @@ export default function Home() {
                 </Link>
               )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {displayItems.map((item) => (
                 <HistoryCard
                   key={item.id}

@@ -29,7 +29,7 @@ export default function HistoryPage() {
   if (status === "loading" || loading) {
     return (
       <main className="min-h-screen">
-        <div className="mx-auto max-w-5xl px-4 py-10">
+        <div className="mx-auto max-w-6xl px-6 py-10">
           <div className="flex items-center justify-center py-24">
             <svg
               className="h-6 w-6 animate-spin text-indigo-500"
@@ -48,7 +48,7 @@ export default function HistoryPage() {
 
   return (
     <main className="min-h-screen">
-      <div className="mx-auto max-w-5xl px-4 py-10">
+      <div className="mx-auto max-w-6xl px-6 py-10">
         <div className="mb-8">
           <Link href="/" className="text-sm text-indigo-600 hover:underline">
             ← Back
@@ -64,7 +64,7 @@ export default function HistoryPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {analyses.map((item) => (
               <HistoryCard
                 key={item.id}
