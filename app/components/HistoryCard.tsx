@@ -12,9 +12,14 @@ export interface AnalysisSummary {
   video_view_count?: number;
   video_comment_count?: number;
   video_like_count?: number;
-  sentiment_positive?: number;
-  sentiment_neutral?: number;
-  sentiment_negative?: number;
+  stats?: {
+    total_comments_analyzed?: number;
+    sentiment_breakdown?: {
+      positive: number;
+      neutral: number;
+      negative: number;
+    };
+  };
   pending?: boolean;
   error?: string;
 }
@@ -61,10 +66,8 @@ export function HistoryCard({
     );
   }
 
-  const hasSentiment =
-    item.sentiment_positive !== undefined &&
-    item.sentiment_neutral !== undefined &&
-    item.sentiment_negative !== undefined;
+  const sentiment = item.stats?.sentiment_breakdown;
+  const hasSentiment = sentiment !== undefined;
 
   return (
     <button
@@ -117,11 +120,11 @@ export function HistoryCard({
         {/* Sentiment bar — always shown; flat gray placeholder when data is absent */}
         <div className="mt-3">
           <div className="flex h-2.5 w-full overflow-hidden rounded-full">
-            {hasSentiment ? (
+            {hasSentiment && sentiment ? (
               <>
-                <div className="bg-emerald-500" style={{ width: `${item.sentiment_positive}%` }} />
-                <div className="bg-gray-300" style={{ width: `${item.sentiment_neutral}%` }} />
-                <div className="bg-rose-500" style={{ width: `${item.sentiment_negative}%` }} />
+                <div className="bg-emerald-500" style={{ width: `${sentiment.positive}%` }} />
+                <div className="bg-gray-300" style={{ width: `${sentiment.neutral}%` }} />
+                <div className="bg-rose-500" style={{ width: `${sentiment.negative}%` }} />
               </>
             ) : (
               <div className="w-full bg-gray-200" />
@@ -129,13 +132,13 @@ export function HistoryCard({
           </div>
           <div className="mt-1.5 flex flex-wrap gap-x-3 text-xs">
             <span className="text-emerald-600">
-              ● Positive {hasSentiment ? `${item.sentiment_positive}%` : "—"}
+              ● Positive {sentiment ? `${sentiment.positive}%` : "—"}
             </span>
             <span className="text-gray-400">
-              ● Neutral {hasSentiment ? `${item.sentiment_neutral}%` : "—"}
+              ● Neutral {sentiment ? `${sentiment.neutral}%` : "—"}
             </span>
             <span className="text-rose-500">
-              ● Negative {hasSentiment ? `${item.sentiment_negative}%` : "—"}
+              ● Negative {sentiment ? `${sentiment.negative}%` : "—"}
             </span>
           </div>
         </div>
