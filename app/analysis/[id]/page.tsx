@@ -376,21 +376,19 @@ export default function AnalysisPage() {
             if (key === "video_ideas") {
               return (
                 <section key={key}>
-                  <div className="rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 p-6 shadow-md">
-                    <div className="mb-1 flex items-center gap-2 text-white">
-                      {icon}
+                  <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-6">
+                    <div className="mb-1 flex items-center gap-2 text-indigo-600">
+                      <span className="text-lg">✨</span>
                       <h2 className="text-lg font-bold">Video Ideas</h2>
                     </div>
-                    <p className="mb-5 text-sm text-indigo-200">
-                      AI-generated ideas synthesized from every insight above
-                    </p>
+
                     <div className="flex flex-col gap-3">
                       {items.map((item, i) => {
                         const body = item.description ?? item.reason ?? "";
                         return (
-                          <div key={i} className="rounded-xl bg-white/10 p-4 backdrop-blur-sm border border-white/20">
-                            <p className="font-semibold text-white">{item.title}</p>
-                            {body && <p className="mt-1.5 text-sm leading-relaxed text-indigo-100">{body}</p>}
+                          <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm border-l-4 border-l-indigo-400">
+                            <p className="font-semibold text-gray-900">{item.title}</p>
+                            {body && <p className="mt-1.5 text-sm leading-relaxed text-gray-500">{body}</p>}
                           </div>
                         );
                       })}
