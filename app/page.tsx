@@ -301,7 +301,7 @@ function LandingPage() {
               </p>
               <button
                 onClick={() => signIn("google")}
-                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                className="cursor-pointer flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
               >
                 <GoogleIcon className="h-4 w-4" />
                 Sign in with Google
@@ -420,7 +420,7 @@ function LandingPage() {
             </p>
             <button
               onClick={() => signIn("google")}
-              className="mt-6 w-full rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+              className="cursor-pointer mt-6 w-full rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
             >
               Buy credits
             </button>
@@ -441,7 +441,7 @@ function LandingPage() {
           <div className="mt-8 flex justify-center">
             <button
               onClick={() => signIn("google")}
-              className="flex items-center gap-2.5 rounded-xl bg-indigo-600 px-8 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+              className="cursor-pointer flex items-center gap-2.5 rounded-xl bg-indigo-600 px-8 py-4 text-base font-semibold text-white shadow-sm transition hover:bg-indigo-700"
             >
               <GoogleIcon className="h-5 w-5" />
               Sign in with Google
@@ -553,12 +553,13 @@ export default function Home() {
           setStatus("idle");
           fetchHistory();
         }
-      }, 3000);
+      }, 1500);
     },
     [fetchHistory],
   );
 
-  // On mount: restore in-progress job from sessionStorage if any.
+  // On mount: restore placeholder immediately so the card shows as soon as the
+  // dashboard renders, regardless of how long auth takes to resolve.
   useEffect(() => {
     const savedJobId = sessionStorage.getItem("activeJobId");
     if (!savedJobId) return;
@@ -581,9 +582,16 @@ export default function Home() {
         ...h,
       ];
     });
-    startPolling(savedJobId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Start polling only once authenticated so fetchHistory has a live session.
+  useEffect(() => {
+    if (authStatus !== "authenticated") return;
+    const savedJobId = sessionStorage.getItem("activeJobId");
+    if (!savedJobId) return;
+    if (pollIntervalRef.current) return;
+    startPolling(savedJobId);
+  }, [authStatus, startPolling]);
 
   useEffect(() => {
     fetchHistory();
@@ -606,9 +614,12 @@ export default function Home() {
     }
   }, []);
 
-  // Show marketing page for logged-out users (and during auth loading)
-  if (authStatus !== "authenticated") {
+  if (authStatus === "unauthenticated") {
     return <LandingPage />;
+  }
+
+  if (authStatus === "loading") {
+    return <main className="min-h-screen bg-gradient-to-b from-indigo-50/70 to-white" />;
   }
 
   async function handleSubmit(e: React.FormEvent) {
