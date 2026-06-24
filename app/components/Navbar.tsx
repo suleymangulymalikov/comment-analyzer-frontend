@@ -8,7 +8,6 @@ export default function Navbar() {
   const { data: session, status } = useSession();
   const [credits, setCredits] = useState<number | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchCredits = useCallback(async () => {
@@ -40,30 +39,6 @@ export default function Navbar() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownOpen]);
-
-  async function handleCheckout() {
-    setCheckoutLoading(true);
-    setDropdownOpen(false);
-    try {
-      const res = await fetch("/api/payments/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          price_key: "pack_standard",
-          success_url: `${window.location.origin}/?payment=success`,
-          cancel_url: window.location.href,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.checkout_url) {
-        window.location.href = data.checkout_url;
-      }
-    } catch {
-      // checkout errors surface through the payment provider
-    } finally {
-      setCheckoutLoading(false);
-    }
-  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-gray-200 bg-white">
@@ -98,9 +73,12 @@ export default function Navbar() {
               History
             </Link>
             {credits !== null && (
-              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+              <Link
+                href="/credits"
+                className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
+              >
                 {credits} credits
-              </span>
+              </Link>
             )}
           <div className="relative" ref={dropdownRef}>
             <button
@@ -140,13 +118,13 @@ export default function Navbar() {
                 </div>
 
                 {/* Buy credits */}
-                <button
-                  onClick={handleCheckout}
-                  disabled={checkoutLoading}
-                  className="cursor-pointer flex w-full items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                <Link
+                  href="/credits"
+                  onClick={() => setDropdownOpen(false)}
+                  className="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  {checkoutLoading ? "Redirecting…" : "Buy credits"}
-                </button>
+                  Buy credits
+                </Link>
 
                 {/* Support */}
                 <a

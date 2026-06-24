@@ -1,14 +1,24 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 @AGENTS.md
 
-# Comment Analyzer — Frontend
+## Commands
 
-Next.js 16 frontend for a YouTube comment analysis SaaS. Users sign in with Google, paste a YouTube URL, and receive AI-generated insights about the video's comments. Credits are consumed per analysis.
+```bash
+npm run dev       # start dev server on :3000
+npm run build     # production build
+npm run lint      # ESLint (no test suite exists)
+```
+
+There are no automated tests. Verify changes by running the dev server and exercising the UI.
 
 ## Stack
 
-- **Next.js 16** with App Router, TypeScript, Tailwind CSS v4
-- **next-auth v4** — Google OAuth, JWT sessions
-- **FastAPI backend** — separate service, called only from Next.js API routes (never from the browser)
+- **Next.js 16** App Router, TypeScript, Tailwind CSS v4, React 19
+- **next-auth v4** — Google OAuth, JWT sessions (no database adapter)
+- **FastAPI backend** — separate service at `BACKEND_URL`, never called directly from the browser
 
 ## Architecture
 
@@ -16,125 +26,89 @@ Next.js 16 frontend for a YouTube comment analysis SaaS. Users sign in with Goog
 Browser  →  Next.js API routes  →  FastAPI backend
 ```
 
-The browser never calls FastAPI directly. All backend requests go through Next.js API routes running server-side. This means:
-- `BACKEND_URL` is never exposed to the browser
-- `x-user-id` is always stamped from the verified session, never trusted from the browser
-- `INTERNAL_API_SECRET` is never sent to the browser
+All backend calls are server-side only through Next.js API routes. `BACKEND_URL` and `INTERNAL_API_SECRET` are never exposed to the browser. `x-user-id` is always stamped from the verified session server-side.
+
+### Key files
+
+| File | Role |
+|------|------|
+| `lib/backend.ts` | `backendHeaders(userId?)` — adds `Authorization` + `x-user-id` to every backend call |
+| `lib/auth.ts` | next-auth config — Google provider, JWT strategy, syncs user on sign-in via `POST /users` |
+| `app/layout.tsx` | Root layout — wraps `SessionProvider`, renders `<Navbar />` |
+| `app/providers.tsx` | `SessionProvider` wrapper |
+| `app/components/Navbar.tsx` | Sticky header — credit badge (links to `/credits`), avatar dropdown with "Buy credits" → `/credits`, `credits-updated` custom event listener |
+| `app/components/VideoCard.tsx` | Card component + `AnalysisSummary` type — handles pending/error/done states |
+| `app/page.tsx` | Main page — splits on auth status: shows `<LandingPage />` when unauthenticated, analysis form + history grid when authenticated; 402 error shows "You're out of credits" card with link to `/credits` |
+| `app/credits/page.tsx` | Credits page — balance, 3 pack cards (Starter/Standard/Pro), transaction history |
+| `app/history/page.tsx` | Full analysis history grid |
+| `app/analysis/[id]/page.tsx` | Full analysis report — 6 insight sections, sentiment bar, top comments |
+| `app/admin/page.tsx` | Admin panel (gated by `NEXT_PUBLIC_ADMIN_EMAIL`) |
+
+### API routes proxied to FastAPI
+
+| Next.js route | FastAPI | Notes |
+|---|---|---|
+| `POST /api/analyze` | `POST /analyze` | Returns `{ job_id }` immediately — analysis is async |
+| `GET /api/analyze/status/[jobId]` | `GET /analyze/status/{jobId}` | Returns `{ status: "pending"/"done"/"failed", result?, error? }` |
+| `GET /api/analyses` | `GET /analyses` | Summary list (no `stats`/`insights`) |
+| `GET /api/analyses/[id]` | `GET /analyses/{id}` | Full analysis with `stats` + `insights` |
+| `GET /api/credits` | `GET /credits` | Balance + last 10 transactions |
+| `POST /api/payments/checkout` | `POST /payments/checkout` | Validates `price_key` ∈ `{pack_starter, pack_standard, pack_pro}`, returns `{ checkout_url }` |
+| `POST /api/admin/credits` | `POST /admin/credits` | Requires `ADMIN_SECRET` |
+| `GET /api/admin/user/[userId]` | `GET /credits` with userId | Admin only |
+
+## Analysis flow (async polling)
+
+1. `POST /api/analyze` → backend returns `{ job_id }` immediately; job ID is saved to `sessionStorage`
+2. `app/page.tsx` polls `GET /api/analyze/status/<jobId>` every 1.5 s via `setInterval`
+3. A `pending: true` placeholder `AnalysisSummary` is shown in the history grid as a skeleton/spinner
+4. When poll returns `status: "done"`, polling stops, the placeholder is replaced with the real card, and a `credits-updated` custom event is dispatched so `Navbar` refreshes the credit badge
+5. On page reload, `sessionStorage` is checked on mount to restore the polling state without losing the in-progress job
+
+## Credit badge refresh
+
+`Navbar` listens for the `credits-updated` browser custom event (`window.dispatchEvent(new Event("credits-updated"))`). Fire this event from any component that triggers a credit change (analysis complete, payment success).
+
+## Auth flow
+
+1. User signs in with Google
+2. `signIn` callback in `lib/auth.ts` calls `POST /users` on the backend (creates/finds user) — sign-in succeeds even if backend is unreachable
+3. `token.sub` (Google's unique user ID) is stored in the JWT and exposed as `session.user.id`
+4. All API routes call `getServerSession(authOptions)` and pass `session.user.id` as `x-user-id` to FastAPI
 
 ## Environment variables
 
 ```
-BACKEND_URL=http://localhost:8000        # FastAPI base URL
-INTERNAL_API_SECRET=                     # Shared secret — empty = inactive (local dev). Set same value on both hosts in production.
-ADMIN_SECRET=                            # Used by /api/admin/credits to call backend POST /admin/credits
-NEXT_PUBLIC_ADMIN_EMAIL=                 # Email address that gets admin panel access (checked server-side too)
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-NEXTAUTH_SECRET=...
+BACKEND_URL=http://localhost:8000
+INTERNAL_API_SECRET=           # empty = inactive in local dev; same value as backend in prod
+ADMIN_SECRET=                  # same value as backend ADMIN_SECRET
+NEXT_PUBLIC_ADMIN_EMAIL=       # email address gating /admin (checked client- and server-side)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+NEXTAUTH_SECRET=
 NEXTAUTH_URL=http://localhost:3000
 ```
 
-## Backend security
-
-Every server-side fetch to FastAPI goes through `lib/backend.ts`:
-
-```ts
-backendHeaders(userId?)  // returns { Authorization, x-user-id }
-```
-
-- Adds `Authorization: Bearer <INTERNAL_API_SECRET>` when the env var is set
-- Adds `x-user-id` from the verified session
-- The FastAPI `InternalAuthMiddleware` rejects any request missing or with a wrong Authorization header with 403
-- To activate: set `INTERNAL_API_SECRET` to the same random string in both the FastAPI host env and the Next.js host env
-
-## Key files
-
-| File | Purpose |
-|------|---------|
-| `lib/backend.ts` | `backendHeaders()` helper — Authorization + x-user-id for every backend call |
-| `lib/auth.ts` | next-auth config — Google provider, JWT strategy, syncs user to backend on sign-in |
-| `app/providers.tsx` | `SessionProvider` wrapper used in `app/layout.tsx` |
-| `app/page.tsx` | Main UI — analysis form, results, history, credit balance, pricing section |
-| `app/admin/page.tsx` | Admin panel — user credit lookup and manual credit addition |
-| `app/api/analyze/route.ts` | POST — run analysis on a YouTube URL |
-| `app/api/analyze/status/[jobId]/route.ts` | GET — poll job status from FastAPI |
-| `app/api/analyses/route.ts` | GET — list past analyses for the signed-in user |
-| `app/api/analyses/[id]/route.ts` | GET — fetch a single full analysis |
-| `app/api/credits/route.ts` | GET — credit balance + last 10 transactions |
-| `app/api/payments/checkout/route.ts` | POST — create a Stripe Checkout session, returns `checkout_url` |
-| `app/api/admin/credits/route.ts` | POST — add credits to any user (admin only, uses `ADMIN_SECRET`) |
-| `app/api/admin/user/[userId]/route.ts` | GET — fetch credit balance + transactions for any user (admin only) |
-| `app/api/auth/[...nextauth]/route.ts` | next-auth handler |
-
-## Backend API contract
-
-All Next.js → FastAPI calls require:
-- `Authorization: Bearer <INTERNAL_API_SECRET>` (when set)
-- `x-user-id: <google-sub>` (on user-scoped endpoints)
-
-### Endpoints proxied
-
-| Next.js route | FastAPI route | Auth |
-|---------------|---------------|------|
-| POST `/api/analyze` | POST `/analyze` | session + secret |
-| GET `/api/analyze/status/[jobId]` | GET `/analyze/status/{jobId}` | session + secret |
-| GET `/api/analyses` | GET `/analyses` | session + secret |
-| GET `/api/analyses/[id]` | GET `/analyses/{id}` | session + secret |
-| GET `/api/credits` | GET `/credits` | session + secret |
-| POST `/api/payments/checkout` | POST `/payments/checkout` | session + secret |
-| POST `/api/admin/credits` | POST `/admin/credits` | admin email check + `ADMIN_SECRET` |
-| GET `/api/admin/user/[userId]` | GET `/credits` (with userId) | admin email check + secret |
-| *(sign-in callback)* | POST `/users` | secret only |
-
-### Notable response fields
-
-`POST /analyze` returns `credits_remaining` — the UI updates the credit badge from this.
-
-`POST /payments/checkout` returns `{ checkout_url }` — redirect the user to this Stripe URL.
-
-### Error codes
+## Error codes from FastAPI
 
 | Status | Meaning |
 |--------|---------|
-| 401 | Missing x-user-id (not authenticated) |
+| 401 | No/invalid session |
 | 402 | Insufficient credits — response includes `{ required, balance }` |
-| 403 | Missing or wrong Authorization header |
+| 403 | Wrong `INTERNAL_API_SECRET` |
 | 404 | YouTube video not found |
-
-## Credits
-
-Every analysis costs **1 credit** regardless of comment count. The app analyzes the top 300 most-liked comments.
-
-## Pricing plans
-
-| price_key | Type | Price | Credits |
-|-----------|------|-------|---------|
-| `pack_standard` | One-time | $7.99 | 10 |
-| `sub_starter` | Monthly | $9.99/mo | 15/mo |
-| `sub_pro` | Monthly | $19.99/mo | 40/mo |
+| 503 | Backend semaphore full (3 concurrent jobs max) |
 
 ## Git workflow
 
-- **Always create a new branch** for every change — no exceptions, including docs
-- Push the branch, wait for the user to review and merge on GitHub
-- After merge is confirmed, delete the local and remote branch
-- Never push directly to `main`
+- **Always create a new branch** for every change — no direct pushes to `main`
+- Push the branch, wait for review and merge on GitHub, then delete local and remote branch
 
 ## Deployment
 
 | Service | URL |
 |---------|-----|
-| Frontend (Vercel) | https://comment-analyzer-frontend-murex.vercel.app |
-| Backend (Railway) | https://web-production-47395.up.railway.app |
+| Frontend | https://comment-analyzer-frontend-murex.vercel.app |
+| Backend | https://web-production-47395.up.railway.app |
 
-**Google OAuth** — authorized redirect URI registered in Google Cloud Console:
-`https://comment-analyzer-frontend-murex.vercel.app/api/auth/callback/google`
-
-**Railway cold start** — the backend sleeps after ~15 min of inactivity on the free tier. First request after idle takes 20–30 seconds (sign-in is the most noticeable place).
-
-## Auth flow
-
-1. User signs in with Google via next-auth
-2. `signIn` callback in `lib/auth.ts` POSTs to `/users` on the backend (creates or finds the user)
-3. Google `sub` is stored as `session.user.id` via the JWT callback
-4. All API routes read `session.user.id` and pass it as `x-user-id` to FastAPI
+Auto-deploys on push to `main`. Railway free tier sleeps after ~15 min idle (first request takes 20–30 s). Vercel free tier times out API routes at 10 s — `POST /api/analyze` will time out on long analyses without Vercel Pro + `export const maxDuration = 60`.

@@ -17,6 +17,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const ALLOWED_PRICE_KEYS = ["pack_starter", "pack_standard", "pack_pro"];
+  if (!ALLOWED_PRICE_KEYS.includes(body.price_key)) {
+    return NextResponse.json({ error: "Invalid price_key" }, { status: 400 });
+  }
+
   const backendUrl = process.env.BACKEND_URL;
   if (!backendUrl) {
     return NextResponse.json({ error: "Backend not configured" }, { status: 500 });

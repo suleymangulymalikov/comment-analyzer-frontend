@@ -153,7 +153,7 @@ function LandingPage() {
             </button>
           </div>
           <p className="mt-2 text-left text-xs text-gray-400">
-            Top 300 most-liked comments · 1 credit per analysis
+            Top 300 most-liked comments · 10 credits per analysis
           </p>
         </div>
       </section>
@@ -406,28 +406,51 @@ function LandingPage() {
 
       {/* Pricing */}
       <section className="bg-indigo-50 px-6 py-16">
-        <div className="mx-auto max-w-xs text-center">
-          <h2 className="mb-1 text-2xl font-bold text-gray-900">
-            Simple pricing
-          </h2>
-          <p className="mb-8 text-sm text-gray-500">
-            No subscription required.
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="mb-1 text-2xl font-bold text-gray-900">Simple pricing</h2>
+          <p className="mb-10 text-sm text-gray-500">
+            One-time purchase · No subscription · Credits never expire
           </p>
-          <div className="rounded-2xl border border-indigo-200 bg-white p-8 shadow-sm">
-            <p className="text-5xl font-extrabold text-gray-900">$7.99</p>
-            <p className="mt-2 text-sm font-semibold text-gray-500">
-              10 credits · One-time · No subscription
-            </p>
-            <button
-              onClick={() => signIn("google")}
-              className="cursor-pointer mt-6 w-full rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
-            >
-              Buy credits
-            </button>
-            <p className="mt-3 text-xs text-gray-400">
-              1 credit per analysis · Credits never expire
-            </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {[
+              { name: "Starter", price: "$9.99", credits: 50, analyses: 5, perCredit: "$0.20" },
+              { name: "Standard", price: "$19.99", credits: 120, analyses: 12, perCredit: "$0.17", popular: true },
+              { name: "Pro", price: "$39.99", credits: 300, analyses: 30, perCredit: "$0.13" },
+            ].map((pack) => (
+              <div
+                key={pack.name}
+                className={`relative flex flex-col rounded-2xl border p-6 text-left ${
+                  pack.popular
+                    ? "border-indigo-400 bg-white shadow-md"
+                    : "border-gray-200 bg-white shadow-sm"
+                }`}
+              >
+                {pack.popular && (
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-0.5 text-xs font-semibold text-white">
+                    Most popular
+                  </span>
+                )}
+                <p className="text-sm font-semibold text-gray-500">{pack.name}</p>
+                <p className="mt-2 text-3xl font-extrabold text-gray-900">{pack.price}</p>
+                <div className="mt-4 space-y-1.5 text-sm text-gray-600">
+                  <div><span className="font-semibold text-gray-900">{pack.credits}</span> credits</div>
+                  <div><span className="font-semibold text-gray-900">{pack.analyses}</span> analyses</div>
+                  <div><span className="font-semibold text-gray-900">{pack.perCredit}</span> per credit</div>
+                </div>
+                <button
+                  onClick={() => signIn("google")}
+                  className={`cursor-pointer mt-6 w-full rounded-xl py-2.5 text-sm font-semibold transition ${
+                    pack.popular
+                      ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                      : "border border-indigo-300 text-indigo-700 hover:bg-indigo-50"
+                  }`}
+                >
+                  Get started
+                </button>
+              </div>
+            ))}
           </div>
+          <p className="mt-6 text-xs text-gray-400">10 credits per analysis · Credits never expire</p>
         </div>
       </section>
 
@@ -464,6 +487,7 @@ export default function Home() {
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
+  const [creditError, setCreditError] = useState(false);
   const [history, setHistory] = useState<AnalysisSummary[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
@@ -619,7 +643,9 @@ export default function Home() {
   }
 
   if (authStatus === "loading") {
-    return <main className="min-h-screen bg-gradient-to-b from-indigo-50/70 to-white" />;
+    return (
+      <main className="min-h-screen bg-gradient-to-b from-indigo-50/70 to-white" />
+    );
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -633,6 +659,7 @@ export default function Home() {
 
     setStatus("loading");
     setError("");
+    setCreditError(false);
 
     setHistory((h) => [
       {
@@ -677,6 +704,7 @@ export default function Home() {
         ? ` This video needs ${data.required} credit${data.required !== 1 ? "s" : ""}.`
         : "";
       setError(`Not enough credits.${needed}`);
+      setCreditError(true);
       setStatus("error");
       setHistory((h) => h.filter((item) => !item.pending));
       return;
@@ -763,15 +791,30 @@ export default function Home() {
             </button>
           </form>
           <p className="mt-2 text-left text-xs text-gray-400">
-            Top 300 most-liked comments · 1 credit per analysis
+            Top 300 most-liked comments · 10 credits per analysis
           </p>
 
           {/* Error state */}
           {status === "error" && (
-            <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-left">
-              <span className="font-semibold">Error: </span>
-              {error}
-            </div>
+            creditError ? (
+              <div className="mt-6 rounded-xl border border-indigo-200 bg-indigo-50 p-5 flex items-center justify-between gap-4">
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-indigo-900">You&apos;re out of credits</p>
+                  <p className="mt-1 text-sm text-indigo-700">{error.replace("Not enough credits.", "").trim() || "Top up to keep analyzing."}</p>
+                </div>
+                <Link
+                  href="/credits"
+                  className="shrink-0 rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700"
+                >
+                  Buy Credits →
+                </Link>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 text-left">
+                <span className="font-semibold">Error: </span>
+                {error}
+              </div>
+            )
           )}
         </div>
       </section>
