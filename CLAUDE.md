@@ -41,7 +41,7 @@ All backend calls are server-side only through Next.js API routes. `BACKEND_URL`
 | `app/page.tsx` | Main page — splits on auth status: shows `<LandingPage />` when unauthenticated, analysis form + history grid when authenticated; 402 error shows "You're out of credits" card with link to `/credits` |
 | `app/credits/page.tsx` | Credits page — balance, 3 pack cards (Starter/Standard/Pro), transaction history |
 | `app/history/page.tsx` | Full analysis history grid |
-| `app/analysis/[id]/page.tsx` | Full analysis report — 6 insight sections, sentiment bar, top comments |
+| `app/analysis/[id]/page.tsx` | Full analysis report — 6 insight sections, sentiment bar, top comments, "Re-analyze" button |
 | `app/admin/page.tsx` | Admin panel (gated by `NEXT_PUBLIC_ADMIN_EMAIL`) |
 
 ### API routes proxied to FastAPI
@@ -59,11 +59,15 @@ All backend calls are server-side only through Next.js API routes. `BACKEND_URL`
 
 ## Analysis flow (async polling)
 
-1. `POST /api/analyze` → backend returns `{ job_id }` immediately; job ID is saved to `sessionStorage`
+1. `POST /api/analyze` → backend returns `{ job_id }` immediately; job ID is saved to `sessionStorage` under `"activeJobId"`
 2. `app/page.tsx` polls `GET /api/analyze/status/<jobId>` every 1.5 s via `setInterval`
 3. A `pending: true` placeholder `AnalysisSummary` is shown in the history grid as a skeleton/spinner
 4. When poll returns `status: "done"`, polling stops, the placeholder is replaced with the real card, and a `credits-updated` custom event is dispatched so `Navbar` refreshes the credit badge
 5. On page reload, `sessionStorage` is checked on mount to restore the polling state without losing the in-progress job
+
+### Force re-analyze
+
+The backend accepts `force: true` in the `POST /analyze` body to bypass the cached result and re-run the AI analysis. The "Re-analyze" button in `app/analysis/[id]/page.tsx` uses this: it POSTs with `force: true`, writes the returned `job_id` to `sessionStorage["activeJobId"]`, then navigates to `/`. The home page picks up the job on mount and enters the normal polling flow.
 
 ## Credit badge refresh
 
