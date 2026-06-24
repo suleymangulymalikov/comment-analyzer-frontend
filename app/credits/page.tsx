@@ -48,6 +48,7 @@ export default function CreditsPage() {
   const [data, setData] = useState<CreditsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -64,6 +65,7 @@ export default function CreditsPage() {
   }, [session, status, router]);
 
   async function handleCheckout(priceKey: string) {
+    setCheckoutError(null);
     setCheckoutLoading(priceKey);
     try {
       const res = await fetch("/api/payments/checkout", {
@@ -76,9 +78,13 @@ export default function CreditsPage() {
         }),
       });
       const json = await res.json();
-      if (res.ok && json.checkout_url) {
-        window.location.href = json.checkout_url;
+      if (!res.ok || !json.checkout_url) {
+        setCheckoutError(json.error ?? "Something went wrong. Please try again.");
+        return;
       }
+      window.location.href = json.checkout_url;
+    } catch {
+      setCheckoutError("Something went wrong. Please try again.");
     } finally {
       setCheckoutLoading(null);
     }
@@ -172,6 +178,10 @@ export default function CreditsPage() {
             );
           })}
         </div>
+
+        {checkoutError && (
+          <p className="mt-4 text-center text-sm text-red-600">{checkoutError}</p>
+        )}
 
         <p className="mt-4 text-center text-xs text-gray-400">
           One-time purchase · No subscription · Secure checkout via Stripe
