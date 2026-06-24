@@ -128,12 +128,12 @@ export default function CreditsPage() {
               <div
                 key={pack.key}
                 className={`relative flex flex-col rounded-2xl border p-6 ${
-                  pack.popular
+                  "popular" in pack && pack.popular
                     ? "border-indigo-400 bg-indigo-50 shadow-md"
                     : "border-gray-200 bg-white shadow-sm"
                 }`}
               >
-                {pack.popular && (
+                {"popular" in pack && pack.popular && (
                   <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-0.5 text-xs font-semibold text-white">
                     Most popular
                   </span>
@@ -161,7 +161,7 @@ export default function CreditsPage() {
                   onClick={() => handleCheckout(pack.key)}
                   disabled={anyBuying}
                   className={`cursor-pointer mt-6 w-full rounded-xl py-2.5 text-sm font-semibold transition disabled:opacity-50 ${
-                    pack.popular
+                    "popular" in pack && pack.popular
                       ? "bg-indigo-600 text-white hover:bg-indigo-700"
                       : "border border-indigo-300 text-indigo-700 hover:bg-indigo-50"
                   }`}
