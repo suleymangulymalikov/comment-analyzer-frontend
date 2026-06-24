@@ -218,6 +218,47 @@ export default function AnalysisPage() {
   const [data, setData] = useState<AnalysisResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reanalyzing, setReanalyzing] = useState(false);
+  const [reanalyzeError, setReanalyzeError] = useState("");
+
+  async function handleReanalyze() {
+    if (!data?.video_id) return;
+    setReanalyzing(true);
+    setReanalyzeError("");
+
+    const res = await fetch("/api/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        video_url: `https://www.youtube.com/watch?v=${data.video_id}`,
+        force: true,
+      }),
+    }).catch(() => null);
+
+    if (!res) {
+      setReanalyzeError("Network error — could not reach the server.");
+      setReanalyzing(false);
+      return;
+    }
+
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      setReanalyzeError(json?.error ?? `Error ${res.status}`);
+      setReanalyzing(false);
+      return;
+    }
+
+    const jobId: string | undefined = json?.job_id;
+    if (!jobId) {
+      setReanalyzeError("Unexpected response from server.");
+      setReanalyzing(false);
+      return;
+    }
+
+    sessionStorage.setItem("activeJobId", jobId);
+    router.push("/");
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -300,9 +341,19 @@ export default function AnalysisPage() {
                 </a>
               )}
             </div>
-            <div className="mt-3">
+            <div className="mt-3 flex items-center gap-4">
               <span className="text-sm text-gray-400">{date}</span>
+              <button
+                onClick={handleReanalyze}
+                disabled={reanalyzing}
+                className="cursor-pointer rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-600 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {reanalyzing ? "Starting…" : "Re-analyze"}
+              </button>
             </div>
+            {reanalyzeError && (
+              <p className="mt-2 text-xs text-red-600">{reanalyzeError}</p>
+            )}
           </div>
         </div>
 

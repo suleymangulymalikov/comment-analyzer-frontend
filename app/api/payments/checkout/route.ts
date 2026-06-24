@@ -35,13 +35,13 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
   } catch {
-    return NextResponse.json({ error: "Could not reach the backend." }, { status: 502 });
+    return NextResponse.json({ error: "Checkout is unavailable right now. Please try again later." }, { status: 502 });
   }
 
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    const message = data?.detail ?? data?.error ?? `Backend returned ${response.status}`;
+    const message = data?.detail ?? data?.error ?? "Checkout is unavailable right now. Please try again later.";
     return NextResponse.json({ error: message }, { status: response.status });
   }
 
